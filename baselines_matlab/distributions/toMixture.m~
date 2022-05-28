@@ -1,0 +1,13 @@
+ function mix = toMixture(mixProp,mu, Sigma,distr)
+        [k,dim]=size(mu);
+        comps=cell(1,k);
+        [n]
+        if(length(size(mu))==2)
+            for j =1:k
+                comps{j}=makedistWrapper(distr,'mu', mu(j,:),'sigma',Sigma(:,:,j));
+            end
+        else
+            makedistWrapper(distr,'mu', mu,'sigma',Sigma(:,:,j));
+        end
+        mix=mixture(mixProp, comps);
+ end

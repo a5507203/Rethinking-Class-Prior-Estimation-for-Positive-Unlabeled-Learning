@@ -1,0 +1,10 @@
+function [alpha, gamma, pnPost, pnPost1, out] = runBias(S) 
+
+X=S.X;
+X1=S.X1;
+opts=struct();
+opts.M=5;
+[alpha, gamma, eta, out]=alphamaxB(X,X1,opts);
+[pnPost,pnPost1]=recoverPNPostC(alpha,gamma,eta,out);
+
+end

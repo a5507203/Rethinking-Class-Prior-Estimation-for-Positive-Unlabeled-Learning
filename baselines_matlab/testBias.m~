@@ -1,0 +1,5 @@
+S=load('~/Data/Bias/finalData.mat');
+X=S.X;
+X1=S.X1;
+C1=S.cluster_X1;
+C=S.cluster_X;

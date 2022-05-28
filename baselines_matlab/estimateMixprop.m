@@ -1,0 +1,275 @@
+function [est, out] = estimateMixprop(X, X1, method, opts)
+
+% function [est, out] = estimateMixprop (X, X1, method, opts)
+%
+% Implements several methods to estimate the mixing proportion of a two
+% component mixture using a sample from the the mixture and a sample from
+% one of the components.
+%
+% Input:
+%   X: matrix containing the mixture sample; rows correspond to data points
+%      and columns correspond to features
+%   X1: matrix containing the component sample
+%   method (optional): string or a cell array of strings giving the name of
+%        the method. It can take following values:
+%       'AlphaMax' (default): The main algorithm of the paper 
+%                             "Nonparametric semi-supervised learning of 
+%                             class proportions".
+%       'AlphaMax_N' : The main algorithm of the paper 
+%                             "Nonparametric semi-supervised learning of 
+%                             class proportions".
+%       'Elkan_Noto' (EN):The algorithm of Elkan and Noto (2008). The paper
+%           gives six different estimates that can be grouped into 
+%           2 groups(main and alternative) of three (e1,e2, e3) each. See opts
+%           to specify a particular estimate. The default is alternative
+%           e1. We provide two implementation of EN that use different
+%           classifiers (SVM and NN). See opts to choose between them.
+%       'GMM_T': Estimation with univariate Gaussian mixture model on
+%           transformed data.
+%       'PDF_Ratio': baseline algorithm motivated from theory, Use 
+%           opts.isrobust=true for a robust estimate.
+%       'CDF_Based': another baseline algorithm motivated from theory.
+%       'all': execute all of the above methods. If method is a cell array
+%           of strings it should not contain 'all'.
+%   opts (optional): Structure used to specify the meta parameters for each
+%        method. Some important meta parameters can be specified throught
+%        the follwing fields:
+%       'transform': (default: transform_nn) a function that transforms X, X1 
+%               to univariate sample 
+%
+%       'isPlot_llCurve' (boolean): (default: false) To plot the log
+%               likelihood versus mixing proportion for AlphaMax.
+%       'constraints' (numeric): A row vector with values in (0,1). Gives
+%               the mixing proportions where the log likelihood is evaluated (AlphaMax).
+%               Use this option with caution because the code can potentially break.
+%               and the estimate may not be reliable with user specified 'constraints'. 
+%       
+%       'isAlternative' (boolean): (default: true) Specifies the group
+%               (alternative or main) of the Elkan_Noto estimate.
+%       'ei' (numeric scalar): Takes value 1 (default), 2 or 3 corresponding to e1,
+%               e2, e3 for Elkan_Noto.
+%       'EN_classifier' (string): Takes value 'NN' (default) or 'SVM';
+%               specifies the classifier used by Elkan_Noto.
+%   
+%       'isRobust' (booloean): (default: false)  For PDF_Ratio to give robust estimates.
+%   
+% Output:
+%   est: Estimate of the mixing proportion. Vector for multiple algorithms,
+%       scalar for one algorithm.
+%   out: Structure with algorithm specific quantities. Name of each 
+%        algorithm appears as a field, which is also a structure.
+%
+% Authors: Shantanu Jain, Martha White, Michael Trosset, Predrag Radivojac
+% Contact: Shantanu Jain (shajain@indiana.edu)
+% Indiana University, Bloomington, Indiana, U.S.A.
+% December 2015
+
+addpath('./distributions/','./Algorithms/','./Transformations/','./shared/','./SVM/','./densityEstimation/','./plots/');
+
+DEF.mixprop_prior=0.1;
+DEF.max_x1SS=10000; %maximum component sample size
+DEF.max_xSS=100000; %maximum mixture sample size
+DEF.min_x1SS=100;
+
+DEF.isRobust=false;
+
+DEF.isPlot_llCurve=false; 
+DEF.constraints=0.01:0.01:0.99;
+DEF.is_user_constraint=false;
+
+DEF.ei=1;
+DEF.isAlternative=true;
+DEF.EN_classifier='NN';
+
+DEF.transform=@transform_nn;
+
+if nargin < 4
+    opts=DEF;
+else
+    opts.is_user_constraint = isfield(opts,'constraints');
+    opts=getOptions(opts,DEF);
+end
+opts.min_xSS=round(100/opts.mixprop_prior);
+
+[mix_ss,mix_dim]=size(X);
+[comp_ss,comp_dim]=size(X1);
+if mix_ss < opts.min_xSS
+    warning('Unreliable estimates: Too few examples in the mixture sample');
+end
+if comp_ss < opts.min_x1SS
+     warning('Unreliable estimates: Too few examples in the component sample');
+end
+
+if mix_dim ~= comp_dim
+    error('The dimensions of X and X1 are not equal')
+end
+%reduce the number of data points to the maximum allowed
+if mix_ss>opts.max_xSS
+    X=X(randi(mix_ss,opts.max_xSS,1),:);
+end
+if comp_ss>opts.max_x1SS
+    X1=X1(randi(comp_ss,opts.max_x1SS,1),:);
+end
+
+if comp_dim==1 && mix_dim==1
+    %transformation not required
+    x=X;
+    x1=X1;
+end
+
+methodList={'AlphaMax','AlphaMax_N','Elkan_Noto','GMM_T','PDF_Ratio','CDF_Based'};
+
+if nargin < 3
+    method={'AlphaMax'};
+elseif isstr(method)
+    if strcmp(method,'all')
+        method=methodList;
+    else
+        method={method};
+    end
+elseif isempty(method)
+    error('method cannot be empty');
+end
+
+%inline functions implementing the methods
+methodFcn={@alphamax,@alphamaxN,@en,@gmm_t,@pdf_ratio,@cdf_based};
+
+for im = 1:length(method)
+    str=validatestring(method{im},methodList);
+    ix=find(strcmp(str,methodList));
+    fcn=methodFcn{ix};
+    
+    if strcmp(str,'Elkan_Noto')
+        [est.(str),out.(str)]=fcn(X,X1,opts);
+    else
+        if exist('x')~=1 || exist('x1')~=1
+            [x,x1,out.transform]=opts.transform(X,X1);
+            x=x(:); x1=x1(:);
+            out.x=x; out.x1=x1;
+            %opts.densityEst_fcn=@densEst_histDouble;
+        end
+%         if isfield(opts,'postTransform')
+%                 [x,x1]=opts.postTransform(x,x1);
+%                 opts.densityEst_fcn=@densEst_hist_gaussian;
+%         end
+        [est.(str),out.(str)]=fcn(x,x1,opts);
+    end
+end
+out.opts=opts;
+
+end
+
+%
+%% Individual estimators
+%
+
+function [est,out]=alphamax(x,x1,opts)
+if ~opts.is_user_constraint
+    if opts.mixprop_prior < 0.1
+        opts.constraints=sort([logscale_cons(1e-3,0.1,100), opts.constraints]);
+    end
+    if opts.mixprop_prior > 0.9
+        opts.constraints=sort([opts.constraints,logscale_cons(1-1e-3,0.9,100)]);
+    end
+end
+[alphas,fs,out.compute_llCurve]=compute_llCurve(x,x1,opts);
+% Ensures that the LL curve is non-increasing
+fs=llCurve_correction(alphas,fs);
+out.alphas=alphas;
+out.fs=fs;
+if opts.is_user_constraint
+    warning(['Inflection script might fail or estimate incorrect mixing ', ...
+    'proportion for user specified constraints'])
+end
+[est,out.inflectionScript]=inflectionScript(alphas,-fs,opts);
+if opts.isPlot_llCurve
+    plot(alphas, fs, 'o');
+    markAlpha_wrap(est,alphas,fs);
+    xlabel('Mixing proportion');
+    ylabel('Log-likelihood');
+    title('The AlphaMax log-likelihood plot');
+end
+end
+
+function [est,out]=alphamaxN(x,x1,opts)
+if ~opts.is_user_constraint
+    if opts.mixprop_prior < 0.1
+        opts.constraints=sort([logscale_cons(1e-3,0.1,100), opts.constraints]);
+    end
+    if opts.mixprop_prior > 0.9
+        opts.constraints=sort([opts.constraints,logscale_cons(1-1e-3,0.9,100)]);
+    end
+end
+[est,out]=AlphaMax_noisy(x,x1,opts);
+alphas=out.AM1.alphas;fs=out.AM1.fs;
+
+if opts.isPlot_llCurve
+    plot(alphas, fs, 'o');
+    hold on;
+    markAlpha_wrap(out.AM1.est,alphas,fs);
+    xlabel('Mixing proportion');
+    ylabel('Log-likelihood');
+    title('The AlphaMax log-likelihood plot for proportion of labeled in unlabeled');
+end
+figure;
+alphas=out.AM2.alphas;fs=out.AM2.fs;
+if opts.isPlot_llCurve
+    plot(alphas, fs, 'o');
+    hold on;
+    markAlpha_wrap(out.AM2.est,alphas,fs);
+    xlabel('Mixing proportion');
+    ylabel('Log-likelihood');
+    title('The AlphaMax log-likelihood plot for proportion of unlabeled in labeled');
+end
+%hold off;
+if opts.is_user_constraint
+    warning(['Inflection script might fail or estimate incorrect mixing ', ...
+    'proportion for user specified constraints'])
+end
+end
+
+function [est,out]=en(X,X1,opts)
+% X = training data, where rows are data points and columns are features
+Xtrain=[X;X1];
+% s = class labels, where 0 means unlabeled and 1 means labeled
+s=[zeros(size(X,1),1);ones(size(X1,1),1)];
+if strcmp(opts.EN_classifier,'NN')
+    [ests,~,~,out.elkan_nn]=elkan_nn(Xtrain,s,opts);
+elseif strcmp(opts.EN_classifier,'SVM')
+    [ests,~,~,out.elkan_svm]=elkan_svm(Xtrain,s,opts);
+else
+    error('Classifier specified for Elkan_Noto is not supported');
+end
+out.ests=alpha_unlabeledData(ests,size(X,1),size(X1,1));
+if opts.isAlternative
+    est=out.ests(opts.ei);
+else
+    est=out.ests(opts.ei+3);
+end
+out.opts=opts;
+end
+
+function [est,out]=gmm_t(x,x1,opts)
+
+[est,out.gmm_t]=gmm(x,x1,opts);
+
+end
+
+function [est,out]=pdf_ratio(x,x1,opts)
+
+[est,out.pdfRatio]=pdfRatio(x,x1,opts);
+if ~opts.isRobust
+    est=est(1);
+else
+    est=est(2);
+end
+
+end
+
+
+function [est,out]=cdf_based(x,x1,opts)
+
+[est,out.cdfBased]=cdfBased(x,x1,opts);
+
+end
+

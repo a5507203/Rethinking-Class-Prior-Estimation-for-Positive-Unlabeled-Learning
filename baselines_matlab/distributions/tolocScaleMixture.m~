@@ -1,0 +1,15 @@
+ function [mix,comps] = tolocScaleMixture(mixProp,mu, Sigma,distr)
+        k=length(mixProp);
+        comps=cell(1,k);
+        [nrow,ncol]=size(mu);
+        %if(nrow~=1 && ncol~=1)
+            for j =1:k
+                comps{j}=makedistWrapper(distr,'mu', squeeze(mu(j,:)),'sigma',squeeze(Sigma(j,:,:)));
+            end
+        %else
+        %    for j =1:k
+         %       comps{j}=makedistWrapper(distr,'mu', mu(j),'sigma',Sigma(j));
+         %   end
+        %end
+        mix=mixture(mixProp, comps);
+ end
