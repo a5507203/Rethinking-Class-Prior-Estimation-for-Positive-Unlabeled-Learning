@@ -1,14 +1,11 @@
 +++++environment configuration++++++
 
+code for the ICLR2022 Paper "Rethinking Class-Prior Estimation for Positive-Unlabeled Learning"
+
+
 #########important###############
 The code is only tested on Linux based System (Ubuntu 20.04). 
 The python version is 3.6.9. The pytorh version is 1.2.0 with GPU acceleration. 
-
-It is unknown that if the code is compatible on windows or different versions of pytorh and python. 
-We have not tested to run our code in a CPU environment. 
-
-Upon acception of the paper, we will test the compatibility of the code under different environments and publish the code on GitHub.
-To avoid errors caused by inconsistent environment, you are encouraged to run our code under a same environment.
 #################################
 
 The code for the AM and EN estimators were implemented in (Jain et al., 2016) and are acquired through personal communication. 
