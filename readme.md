@@ -4,7 +4,7 @@ code for the ICLR2022 Paper "Rethinking Class-Prior Estimation for Positive-Unla
 <div align="center">   
   
 # Rethinking Class-Prior Estimation for Positive-Unlabeled Learning
-[![Paper](https://img.shields.io/badge/ICLR2022-green)](https://openreview.net/pdf?id=aYAA-XHKyk)
+[![Paper](https://img.shields.io/badge/ICLR22-green)](https://openreview.net/pdf?id=aYAA-XHKyk)
 
 </div>
 
