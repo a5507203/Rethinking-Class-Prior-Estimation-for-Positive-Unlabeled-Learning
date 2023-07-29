@@ -3,8 +3,8 @@ code for the ICLR2022 Paper "Rethinking Class-Prior Estimation for Positive-Unla
 
 <div align="center">   
   
-# Instance-dependent Label-noise Learning under a Structural Causal Model
-[![Paper](https://img.shields.io/badge/ICLR2022-green)](https://proceedings.neurips.cc/paper/2021/file/23451391cd1399019fa0421129066bc6-Paper.pdf3)
+# Rethinking Class-Prior Estimation for Positive-Unlabeled Learning
+[![Paper](https://img.shields.io/badge/ICLR2022-green)](https://openreview.net/pdf?id=aYAA-XHKyk)
 
 </div>
 
